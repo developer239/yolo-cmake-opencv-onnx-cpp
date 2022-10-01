@@ -1,240 +1,215 @@
 #include <fstream>
-#include <sstream>
-#include <iostream>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
 
-#include <onnxruntime_cxx_api.h>
+#include <opencv2/opencv.hpp>
 
-using namespace std;
-using namespace cv;
-using namespace Ort;
-
-struct Net_config
+std::vector<std::string> load_class_list()
 {
-  float confThreshold; // Confidence threshold
-  float nmsThreshold;  // Non-maximum suppression threshold
-  string modelpath;
+  std::vector<std::string> class_list;
+  std::ifstream ifs("../coco.names");
+  std::string line;
+  while (getline(ifs, line))
+  {
+    class_list.push_back(line);
+  }
+  return class_list;
+}
+
+void load_net(cv::dnn::Net &net, bool is_cuda)
+{
+  auto result = cv::dnn::readNet("../models/yolov7_640x640.onnx");
+  if (is_cuda)
+  {
+    std::cout << "Attempty to use CUDA\n";
+    result.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+    result.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA_FP16);
+  }
+  else
+  {
+    std::cout << "Running on CPU\n";
+    result.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+    result.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+  }
+  net = result;
+}
+
+const std::vector<cv::Scalar> colors = {cv::Scalar(255, 255, 0), cv::Scalar(0, 255, 0), cv::Scalar(0, 255, 255), cv::Scalar(255, 0, 0)};
+
+const float INPUT_WIDTH = 640.0;
+const float INPUT_HEIGHT = 640.0;
+const float SCORE_THRESHOLD = 0.2;
+const float NMS_THRESHOLD = 0.4;
+const float CONFIDENCE_THRESHOLD = 0.4;
+
+struct Detection
+{
+  int class_id;
+  float confidence;
+  cv::Rect box;
 };
 
-typedef struct BoxInfo
-{
-  float x1;
-  float y1;
-  float x2;
-  float y2;
-  float score;
-  int label;
-} BoxInfo;
-
-class YOLOV7
-{
-  public:
-    YOLOV7(Net_config config);
-    void detect(Mat& frame);
-  private:
-    int inpWidth;
-    int inpHeight;
-    int nout;
-    int num_proposal;
-    vector<string> class_names;
-    int num_class;
-
-    float confThreshold;
-    float nmsThreshold;
-    vector<float> input_image_;
-    void normalize_(Mat img);
-    void nms(vector<BoxInfo>& input_boxes);
-
-    Env env = Env(ORT_LOGGING_LEVEL_ERROR, "YOLOV7");
-    Ort::Session *ort_session = nullptr;
-    SessionOptions sessionOptions = SessionOptions();
-    vector<char*> input_names;
-    vector<char*> output_names;
-    vector<vector<int64_t>> input_node_dims; // >=1 outputs
-    vector<vector<int64_t>> output_node_dims; // >=1 outputs
-};
-
-YOLOV7::YOLOV7(Net_config config)
-{
-  this->confThreshold = config.confThreshold;
-  this->nmsThreshold = config.nmsThreshold;
-
-  string classesFile = "/Users/michaljarnot/CLionProjects/yolo-opencv/coco.names";
-  string model_path = config.modelpath;
-
-  // model_path to
-
-  std::wstring widestr = std::wstring(model_path.begin(), model_path.end());
-  //OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);
-  sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
-
-  ort_session = new Ort::Session(env, (ORTCHAR_T*) widestr.c_str(), sessionOptions);
-
-
-//  size_t numInputNodes = ort_session->GetInputCount();
-//  size_t numOutputNodes = ort_session->GetOutputCount();
-//  AllocatorWithDefaultOptions allocator;
-//  for (int i = 0; i < numInputNodes; i++)
-//  {
-//    input_names.push_back(ort_session->GetInputName(i, allocator));
-//    Ort::TypeInfo input_type_info = ort_session->GetInputTypeInfo(i);
-//    auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
-//    auto input_dims = input_tensor_info.GetShape();
-//    input_node_dims.push_back(input_dims);
-//  }
-//  for (int i = 0; i < numOutputNodes; i++)
-//  {
-//    output_names.push_back(ort_session->GetOutputName(i, allocator));
-//    Ort::TypeInfo output_type_info = ort_session->GetOutputTypeInfo(i);
-//    auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
-//    auto output_dims = output_tensor_info.GetShape();
-//    output_node_dims.push_back(output_dims);
-//  }
-//  this->inpHeight = input_node_dims[0][2];
-//  this->inpWidth = input_node_dims[0][3];
-//  this->nout = output_node_dims[0][2];
-//  this->num_proposal = output_node_dims[0][1];
-//
-//  ifstream ifs(classesFile.c_str());
-//  string line;
-//  while (getline(ifs, line)) this->class_names.push_back(line);
-//  this->num_class = class_names.size();
+cv::Mat format_yolov5(const cv::Mat &source) {
+  int col = source.cols;
+  int row = source.rows;
+  int _max = MAX(col, row);
+  cv::Mat result = cv::Mat::zeros(_max, _max, CV_8UC3);
+  source.copyTo(result(cv::Rect(0, 0, col, row)));
+  return result;
 }
 
-void YOLOV7::normalize_(Mat img)
-{
-  //    img.convertTo(img, CV_32F);
-  int row = img.rows;
-  int col = img.cols;
-  this->input_image_.resize(row * col * img.channels());
-  for (int c = 0; c < 3; c++)
-  {
-    for (int i = 0; i < row; i++)
-    {
-      for (int j = 0; j < col; j++)
-      {
-        float pix = img.ptr<uchar>(i)[j * 3 + 2 - c];
-        this->input_image_[c * row * col + i * col + j] = pix / 255.0;
+void detect(cv::Mat &image, cv::dnn::Net &net, std::vector<Detection> &output, const std::vector<std::string> &className) {
+  cv::Mat blob;
+
+  auto input_image = format_yolov5(image);
+
+  cv::dnn::blobFromImage(input_image, blob, 1./255., cv::Size(INPUT_WIDTH, INPUT_HEIGHT), cv::Scalar(), true, false);
+  net.setInput(blob);
+  std::vector<cv::Mat> outputs;
+  net.forward(outputs, net.getUnconnectedOutLayersNames());
+
+  float x_factor = input_image.cols / INPUT_WIDTH;
+  float y_factor = input_image.rows / INPUT_HEIGHT;
+
+  float *data = (float *)outputs[0].data;
+
+  const int dimensions = 85;
+  const int rows = 25200;
+
+  std::vector<int> class_ids;
+  std::vector<float> confidences;
+  std::vector<cv::Rect> boxes;
+
+  for (int i = 0; i < rows; ++i) {
+
+    float confidence = data[4];
+    if (confidence >= CONFIDENCE_THRESHOLD) {
+
+      float * classes_scores = data + 5;
+      cv::Mat scores(1, className.size(), CV_32FC1, classes_scores);
+      cv::Point class_id;
+      double max_class_score;
+      minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+      if (max_class_score > SCORE_THRESHOLD) {
+
+        confidences.push_back(confidence);
+
+        class_ids.push_back(class_id.x);
+
+        float x = data[0];
+        float y = data[1];
+        float w = data[2];
+        float h = data[3];
+        int left = int((x - 0.5 * w) * x_factor);
+        int top = int((y - 0.5 * h) * y_factor);
+        int width = int(w * x_factor);
+        int height = int(h * y_factor);
+        boxes.push_back(cv::Rect(left, top, width, height));
       }
+
+    }
+
+    data += 85;
+
+  }
+
+  std::vector<int> nms_result;
+  cv::dnn::NMSBoxes(boxes, confidences, SCORE_THRESHOLD, NMS_THRESHOLD, nms_result);
+  for (int i = 0; i < nms_result.size(); i++) {
+    int idx = nms_result[i];
+    Detection result;
+    result.class_id = class_ids[idx];
+    result.confidence = confidences[idx];
+    result.box = boxes[idx];
+    output.push_back(result);
+  }
+}
+
+int main(int argc, char **argv)
+{
+
+  std::vector<std::string> class_list = load_class_list();
+
+  cv::Mat frame;
+  cv::VideoCapture capture("../sample.mp4");
+  if (!capture.isOpened())
+  {
+    std::cerr << "Error opening video file\n";
+    return -1;
+  }
+
+  bool is_cuda = argc > 1 && strcmp(argv[1], "cuda") == 0;
+
+  cv::dnn::Net net;
+  load_net(net, is_cuda);
+
+  auto start = std::chrono::high_resolution_clock::now();
+  int frame_count = 0;
+  float fps = -1;
+  int total_frames = 0;
+
+  while (true)
+  {
+    capture.read(frame);
+    if (frame.empty())
+    {
+      std::cout << "End of stream\n";
+      break;
+    }
+
+    std::vector<Detection> output;
+    detect(frame, net, output, class_list);
+
+    frame_count++;
+    total_frames++;
+
+    int detections = output.size();
+
+    printf("Frame: %d, Detections: %d\n", frame_count, detections);
+
+    for (int i = 0; i < detections; ++i)
+    {
+
+      auto detection = output[i];
+      auto box = detection.box;
+      auto classId = detection.class_id;
+      const auto color = colors[classId % colors.size()];
+      cv::rectangle(frame, box, color, 3);
+
+      cv::rectangle(frame, cv::Point(box.x, box.y - 20), cv::Point(box.x + box.width, box.y), color, cv::FILLED);
+      cv::putText(frame, class_list[classId].c_str(), cv::Point(box.x, box.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+    }
+
+    if (frame_count >= 30)
+    {
+
+      auto end = std::chrono::high_resolution_clock::now();
+      fps = frame_count * 1000.0 / std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+      frame_count = 0;
+      start = std::chrono::high_resolution_clock::now();
+    }
+
+    if (fps > 0)
+    {
+
+      std::ostringstream fps_label;
+      fps_label << std::fixed << std::setprecision(2);
+      fps_label << "FPS: " << fps;
+      std::string fps_label_str = fps_label.str();
+
+      cv::putText(frame, fps_label_str.c_str(), cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 2);
+    }
+
+    cv::imshow("output", frame);
+
+    if (cv::waitKey(1) != -1)
+    {
+      capture.release();
+      std::cout << "finished by user\n";
+      break;
     }
   }
-}
 
-void YOLOV7::nms(vector<BoxInfo>& input_boxes)
-{
-  sort(input_boxes.begin(), input_boxes.end(), [](BoxInfo a, BoxInfo b) { return a.score > b.score; });
-  vector<float> vArea(input_boxes.size());
-  for (int i = 0; i < int(input_boxes.size()); ++i)
-  {
-    vArea[i] = (input_boxes.at(i).x2 - input_boxes.at(i).x1 + 1)
-               * (input_boxes.at(i).y2 - input_boxes.at(i).y1 + 1);
-  }
+  std::cout << "Total frames: " << total_frames << "\n";
 
-  vector<bool> isSuppressed(input_boxes.size(), false);
-  for (int i = 0; i < int(input_boxes.size()); ++i)
-  {
-    if (isSuppressed[i]) { continue; }
-    for (int j = i + 1; j < int(input_boxes.size()); ++j)
-    {
-      if (isSuppressed[j]) { continue; }
-      float xx1 = (max)(input_boxes[i].x1, input_boxes[j].x1);
-      float yy1 = (max)(input_boxes[i].y1, input_boxes[j].y1);
-      float xx2 = (min)(input_boxes[i].x2, input_boxes[j].x2);
-      float yy2 = (min)(input_boxes[i].y2, input_boxes[j].y2);
-
-      float w = (max)(float(0), xx2 - xx1 + 1);
-      float h = (max)(float(0), yy2 - yy1 + 1);
-      float inter = w * h;
-      float ovr = inter / (vArea[i] + vArea[j] - inter);
-
-      if (ovr >= this->nmsThreshold)
-      {
-        isSuppressed[j] = true;
-      }
-    }
-  }
-  // return post_nms;
-  int idx_t = 0;
-  input_boxes.erase(remove_if(input_boxes.begin(), input_boxes.end(), [&idx_t, &isSuppressed](const BoxInfo& f) { return isSuppressed[idx_t++]; }), input_boxes.end());
-}
-
-void YOLOV7::detect(Mat& frame)
-{
-  Mat dstimg;
-  resize(frame, dstimg, Size(this->inpWidth, this->inpHeight));
-  this->normalize_(dstimg);
-  array<int64_t, 4> input_shape_{ 1, 3, this->inpHeight, this->inpWidth };
-
-  auto allocator_info = MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
-  Value input_tensor_ = Value::CreateTensor<float>(allocator_info, input_image_.data(), input_image_.size(), input_shape_.data(), input_shape_.size());
-
-  // 开始推理
-  vector<Value> ort_outputs = ort_session->Run(RunOptions{ nullptr }, &input_names[0], &input_tensor_, 1, output_names.data(), output_names.size());   // 开始推理
-  /////generate proposals
-  vector<BoxInfo> generate_boxes;
-  float ratioh = (float)frame.rows / this->inpHeight, ratiow = (float)frame.cols / this->inpWidth;
-  int n = 0, k = 0; ///cx,cy,w,h,box_score, class_score
-  const float* pdata = ort_outputs[0].GetTensorMutableData<float>();
-  for (n = 0; n < this->num_proposal; n++)   ///特征图尺度
-  {
-    float box_score = pdata[4];
-    if (box_score > this->confThreshold)
-    {
-      int max_ind = 0;
-      float max_class_socre = 0;
-      for (k = 0; k < num_class; k++)
-      {
-        if (pdata[k + 5] > max_class_socre)
-        {
-          max_class_socre = pdata[k + 5];
-          max_ind = k;
-        }
-      }
-      max_class_socre *= box_score;
-      if (max_class_socre > this->confThreshold)
-      {
-        float cx = pdata[0] * ratiow;  ///cx
-        float cy = pdata[1] * ratioh;   ///cy
-        float w = pdata[2] * ratiow;   ///w
-        float h = pdata[3] * ratioh;  ///h
-
-        float xmin = cx - 0.5 * w;
-        float ymin = cy - 0.5 * h;
-        float xmax = cx + 0.5 * w;
-        float ymax = cy + 0.5 * h;
-
-        generate_boxes.push_back(BoxInfo{ xmin, ymin, xmax, ymax, max_class_socre, max_ind });
-      }
-    }
-    pdata += nout;
-  }
-
-  // Perform non maximum suppression to eliminate redundant overlapping boxes with
-  // lower confidences
-  nms(generate_boxes);
-  for (size_t i = 0; i < generate_boxes.size(); ++i)
-  {
-    int xmin = int(generate_boxes[i].x1);
-    int ymin = int(generate_boxes[i].y1);
-    rectangle(frame, Point(xmin, ymin), Point(int(generate_boxes[i].x2), int(generate_boxes[i].y2)), Scalar(0, 0, 255), 2);
-    string label = format("%.2f", generate_boxes[i].score);
-    label = this->class_names[generate_boxes[i].label] + ":" + label;
-    putText(frame, label, Point(xmin, ymin - 5), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0, 255, 0), 1);
-  }
-}
-
-int main()
-{
-  Net_config YOLOV7_nets = { 0.3, 0.5, "/Users/michaljarnot/CLionProjects/yolo-opencv/models/yolov7_640x640.onnx" };   ////choices=["models/yolov7_640x640.onnx", "models/yolov7-tiny_640x640.onnx", "models/yolov7_736x1280.onnx", "models/yolov7-tiny_384x640.onnx", "models/yolov7_480x640.onnx", "models/yolov7_384x640.onnx", "models/yolov7-tiny_256x480.onnx", "models/yolov7-tiny_256x320.onnx", "models/yolov7_256x320.onnx", "models/yolov7-tiny_256x640.onnx", "models/yolov7_256x640.onnx", "models/yolov7-tiny_480x640.onnx", "models/yolov7-tiny_736x1280.onnx", "models/yolov7_256x480.onnx"]
-  YOLOV7 net(YOLOV7_nets);
-  string imgpath = "/Users/michaljarnot/CLionProjects/yolo-opencv/images/dog.jpg";
-  Mat srcimg = imread(imgpath);
-  net.detect(srcimg);
-
-  static const string kWinName = "Deep learning object detection in ONNXRuntime";
-  namedWindow(kWinName, WINDOW_NORMAL);
-  imshow(kWinName, srcimg);
-  waitKey(0);
-  destroyAllWindows();
+  return 0;
 }
