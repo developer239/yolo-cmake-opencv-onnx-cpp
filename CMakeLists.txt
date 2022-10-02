@@ -5,7 +5,7 @@ project(${APP_NAME})
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(${APP_NAME} main.cpp)
+add_executable(${APP_NAME} main.cpp YOLODetector.h)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
