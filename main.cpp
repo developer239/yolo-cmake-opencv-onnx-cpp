@@ -3,237 +3,291 @@
 #include <iostream>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
-//#include <cuda_provider_factory.h>
 #include <onnxruntime_cxx_api.h>
 
-using namespace std;
-using namespace cv;
-using namespace Ort;
+// Enable cuda part 1
+// #include <cuda_provider_factory.h>
 
-struct Net_config
-{
-  float confThreshold; // Confidence threshold
-  float nmsThreshold;  // Non-maximum suppression threshold
-  string modelpath;
+struct NetConfig {
+  float confidenceThreshold;
+  float nonMaximumSuppressionThreshold;
+  std::string pathToModel;
+  std::string pathToClasses;
 };
 
-typedef struct BoxInfo
-{
+struct BoxInfo {
+  // TODO: refactor to Position
   float x1;
   float y1;
+  // TODO: refactor to Position
   float x2;
   float y2;
   float score;
+  // TODO: why int
   int label;
-} BoxInfo;
-
-class YOLOV7
-{
-  public:
-    YOLOV7(Net_config config);
-    void detect(Mat& frame);
-  private:
-    int inpWidth;
-    int inpHeight;
-    int nout;
-    int num_proposal;
-    vector<string> class_names;
-    int num_class;
-
-    float confThreshold;
-    float nmsThreshold;
-    vector<float> input_image_;
-    void normalize_(Mat img);
-    void nms(vector<BoxInfo>& input_boxes);
-
-    Env env = Env(ORT_LOGGING_LEVEL_ERROR, "YOLOV7");
-    Ort::Session *ort_session = nullptr;
-    SessionOptions sessionOptions = SessionOptions();
-    vector<char*> input_names;
-    vector<char*> output_names;
-    vector<vector<int64_t>> input_node_dims; // >=1 outputs
-    vector<vector<int64_t>> output_node_dims; // >=1 outputs
 };
 
-YOLOV7::YOLOV7(Net_config config)
-{
-  this->confThreshold = config.confThreshold;
-  this->nmsThreshold = config.nmsThreshold;
+class YOLODetector {
+  public:
+    explicit YOLODetector(const NetConfig& config) {
+      this->confidenceThreshold = config.confidenceThreshold;
+      this->nonMaximumSuppressionThreshold = config.nonMaximumSuppressionThreshold;
 
-  string classesFile = "../coco.names";
-  string model_path = config.modelpath;
-  std::wstring widestr = std::wstring(model_path.begin(), model_path.end());
-  //OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);
-  sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
-  ort_session = new Session(env, model_path.c_str(), sessionOptions);
-  size_t numInputNodes = ort_session->GetInputCount();
-  size_t numOutputNodes = ort_session->GetOutputCount();
-  AllocatorWithDefaultOptions allocator;
-  for (int i = 0; i < numInputNodes; i++)
-  {
-    input_names.push_back(ort_session->GetInputName(i, allocator));
-    Ort::TypeInfo input_type_info = ort_session->GetInputTypeInfo(i);
-    auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
-    auto input_dims = input_tensor_info.GetShape();
-    input_node_dims.push_back(input_dims);
-  }
-  for (int i = 0; i < numOutputNodes; i++)
-  {
-    output_names.push_back(ort_session->GetOutputName(i, allocator));
-    Ort::TypeInfo output_type_info = ort_session->GetOutputTypeInfo(i);
-    auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
-    auto output_dims = output_tensor_info.GetShape();
-    output_node_dims.push_back(output_dims);
-  }
-  this->inpHeight = input_node_dims[0][2];
-  this->inpWidth = input_node_dims[0][3];
-  this->nout = output_node_dims[0][2];
-  this->num_proposal = output_node_dims[0][1];
+      // Enable cuda part 2
+      // OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);
+      sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+      ortSession = Ort::Session(ortEnv, config.pathToModel.c_str(), sessionOptions);
 
-  ifstream ifs(classesFile.c_str());
-  string line;
-  while (getline(ifs, line)) this->class_names.push_back(line);
-  this->num_class = class_names.size();
-}
+      LoadTypeInfo();
+      LoadClasses(config.pathToClasses);
+    }
 
-void YOLOV7::normalize_(Mat img)
-{
-  //    img.convertTo(img, CV_32F);
-  int row = img.rows;
-  int col = img.cols;
-  this->input_image_.resize(row * col * img.channels());
-  for (int c = 0; c < 3; c++)
-  {
-    for (int i = 0; i < row; i++)
-    {
-      for (int j = 0; j < col; j++)
-      {
-        float pix = img.ptr<uchar>(i)[j * 3 + 2 - c];
-        this->input_image_[c * row * col + i * col + j] = pix / 255.0;
+    void LoadTypeInfo() {
+      size_t numInputNodes = ortSession.GetInputCount();
+      size_t numOutputNodes = ortSession.GetOutputCount();
+
+      Ort::AllocatorWithDefaultOptions allocator;
+
+      for (int i = 0; i < numInputNodes; i++) {
+        Ort::TypeInfo inputTypeInfo = ortSession.GetInputTypeInfo(i);
+        auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto inputDims = inputTensorInfo.GetShape();
+
+        inputNodeDims.push_back(inputDims);
+        inputNames.push_back(ortSession.GetInputName(i, allocator));
+      }
+
+      for (int i = 0; i < numOutputNodes; i++) {
+        Ort::TypeInfo outputTypeInfo = ortSession.GetOutputTypeInfo(i);
+        auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto outputDims = outputTensorInfo.GetShape();
+
+        outputNames.push_back(ortSession.GetOutputName(i, allocator));
+        outputNodeDims.push_back(outputDims);
+      }
+
+      this->inputHeight = inputNodeDims[0][2];
+      this->inputWidth = inputNodeDims[0][3];
+      this->outputNodeDim = outputNodeDims[0][2];
+      this->numberOfProposals = outputNodeDims[0][1];
+    }
+
+    void LoadClasses(const std::string& pathToClasses) {
+      std::ifstream ifs(pathToClasses.c_str());
+      std::string line;
+
+      while (getline(ifs, line)) {
+        this->classNames.push_back(line);
+      }
+
+      this->numberOfClasses = classNames.size();
+    }
+
+    void detect(cv::Mat& frame) {
+      cv::Mat resizedImage;
+      resize(frame, resizedImage, cv::Size(this->inputWidth, this->inputHeight));
+      this->Normalize(resizedImage);
+
+      auto allocatorInfo = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
+
+      std::array<int64_t, 4> inputShape{ 1, 3, this->inputHeight, this->inputWidth };
+      Ort::Value input_tensor_ = Ort::Value::CreateTensor<float>(
+          allocatorInfo,
+          inputImage.data(),
+          inputImage.size(),
+          inputShape.data(),
+          inputShape.size()
+      );
+
+      std::vector<Ort::Value> ortOutputs = ortSession.Run(
+          Ort::RunOptions{ nullptr },
+          &inputNames[0],
+          &input_tensor_,
+          1,
+          outputNames.data(),
+          outputNames.size()
+      );
+
+      std::vector<BoxInfo> generatedBoxes;
+      float ratioHeight = (float) frame.rows / this->inputHeight;
+      float ratioWidth = (float) frame.cols / this->inputWidth;
+
+      const float* pData = ortOutputs[0].GetTensorMutableData<float>();
+      for (int n = 0; n < this->numberOfProposals; n++) {
+        float boxScore = pData[4];
+
+        if (boxScore > this->confidenceThreshold) {
+          int maxInd = 0;
+          float maxClassScore = 0;
+
+          for (int k = 0; k < numberOfClasses; k++) {
+            if (pData[k + 5] > maxClassScore) {
+              maxClassScore = pData[k + 5];
+              maxInd = k;
+            }
+          }
+
+          maxClassScore *= boxScore;
+          if (maxClassScore > this->confidenceThreshold) {
+            float cx = pData[0] * ratioWidth;
+            float cy = pData[1] * ratioHeight;
+            float w = pData[2] * ratioWidth;
+            float h = pData[3] * ratioHeight;
+
+            float xmin = cx - 0.5 * w;
+            float ymin = cy - 0.5 * h;
+            float xmax = cx + 0.5 * w;
+            float ymax = cy + 0.5 * h;
+
+            generatedBoxes.push_back(BoxInfo{ xmin, ymin, xmax, ymax, maxClassScore, maxInd });
+          }
+        }
+
+        pData += outputNodeDim;
+      }
+
+      NonMaximumSuppression(generatedBoxes);
+
+      // return or draw boxes
+      DrawBoxes(frame, generatedBoxes);
+    }
+
+  private:
+    int inputWidth;
+    int inputHeight;
+    int outputNodeDim;
+    int numberOfProposals;
+
+    std::vector<std::string> classNames;
+    int numberOfClasses;
+
+    float confidenceThreshold;
+    float nonMaximumSuppressionThreshold;
+
+    std::vector<float> inputImage;
+
+    Ort::Env ortEnv = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "YOLODetector");
+    Ort::SessionOptions sessionOptions = Ort::SessionOptions();
+    Ort::Session ortSession = Ort::Session(nullptr);
+
+    std::vector<char*> inputNames;
+    std::vector<char*> outputNames;
+
+    std::vector<std::vector<int64_t>> inputNodeDims;
+    std::vector<std::vector<int64_t>> outputNodeDims;
+
+    void DrawBoxes(cv::Mat& frame, std::vector<BoxInfo> generatedBoxes) {
+      for (auto& generatedBox: generatedBoxes) {
+        int xMin = int(generatedBox.x1);
+        int yMin = int(generatedBox.y1);
+        rectangle(
+            frame,
+            cv::Point(xMin, yMin),
+            cv::Point(int(generatedBox.x2), int(generatedBox.y2)),
+            cv::Scalar(0, 0, 255),
+            2
+        );
+
+        std::string label = cv::format("%.2f", generatedBox.score);
+        label = this->classNames[generatedBox.label] + ":" + label;
+        putText(
+            frame,
+            label,
+            cv::Point(xMin, yMin - 5),
+            cv::FONT_HERSHEY_SIMPLEX,
+            0.75,
+            cv::Scalar(0, 255, 0),
+            1
+        );
       }
     }
-  }
-}
 
-void YOLOV7::nms(vector<BoxInfo>& input_boxes)
-{
-  sort(input_boxes.begin(), input_boxes.end(), [](BoxInfo a, BoxInfo b) { return a.score > b.score; });
-  vector<float> vArea(input_boxes.size());
-  for (int i = 0; i < int(input_boxes.size()); ++i)
-  {
-    vArea[i] = (input_boxes.at(i).x2 - input_boxes.at(i).x1 + 1)
-               * (input_boxes.at(i).y2 - input_boxes.at(i).y1 + 1);
-  }
+    void Normalize(cv::Mat img) {
+      int rows = img.rows;
+      int cols = img.cols;
 
-  vector<bool> isSuppressed(input_boxes.size(), false);
-  for (int i = 0; i < int(input_boxes.size()); ++i)
-  {
-    if (isSuppressed[i]) { continue; }
-    for (int j = i + 1; j < int(input_boxes.size()); ++j)
-    {
-      if (isSuppressed[j]) { continue; }
-      float xx1 = (max)(input_boxes[i].x1, input_boxes[j].x1);
-      float yy1 = (max)(input_boxes[i].y1, input_boxes[j].y1);
-      float xx2 = (min)(input_boxes[i].x2, input_boxes[j].x2);
-      float yy2 = (min)(input_boxes[i].y2, input_boxes[j].y2);
-
-      float w = (max)(float(0), xx2 - xx1 + 1);
-      float h = (max)(float(0), yy2 - yy1 + 1);
-      float inter = w * h;
-      float ovr = inter / (vArea[i] + vArea[j] - inter);
-
-      if (ovr >= this->nmsThreshold)
-      {
-        isSuppressed[j] = true;
-      }
-    }
-  }
-  // return post_nms;
-  int idx_t = 0;
-  input_boxes.erase(remove_if(input_boxes.begin(), input_boxes.end(), [&idx_t, &isSuppressed](const BoxInfo& f) { return isSuppressed[idx_t++]; }), input_boxes.end());
-}
-
-void YOLOV7::detect(Mat& frame)
-{
-  Mat dstimg;
-  resize(frame, dstimg, Size(this->inpWidth, this->inpHeight));
-  this->normalize_(dstimg);
-  array<int64_t, 4> input_shape_{ 1, 3, this->inpHeight, this->inpWidth };
-
-  auto allocator_info = MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
-  Value input_tensor_ = Value::CreateTensor<float>(allocator_info, input_image_.data(), input_image_.size(), input_shape_.data(), input_shape_.size());
-
-  // 开始推理
-  vector<Value> ort_outputs = ort_session->Run(RunOptions{ nullptr }, &input_names[0], &input_tensor_, 1, output_names.data(), output_names.size());   // 开始推理
-  /////generate proposals
-  vector<BoxInfo> generate_boxes;
-  float ratioh = (float)frame.rows / this->inpHeight, ratiow = (float)frame.cols / this->inpWidth;
-  int n = 0, k = 0; ///cx,cy,w,h,box_score, class_score
-  const float* pdata = ort_outputs[0].GetTensorMutableData<float>();
-  for (n = 0; n < this->num_proposal; n++)   ///特征图尺度
-  {
-    float box_score = pdata[4];
-    if (box_score > this->confThreshold)
-    {
-      int max_ind = 0;
-      float max_class_socre = 0;
-      for (k = 0; k < num_class; k++)
-      {
-        if (pdata[k + 5] > max_class_socre)
-        {
-          max_class_socre = pdata[k + 5];
-          max_ind = k;
+      this->inputImage.resize(rows * cols * img.channels());
+      for (int channels = 0; channels < 3; channels++) {
+        for (int row = 0; row < rows; row++) {
+          for (int col = 0; col < cols; col++) {
+            float pixel = img.ptr<uchar>(row)[col * 3 + 2 - channels];
+            this->inputImage[channels * rows * cols + row * cols + col] = pixel / 255.0;
+          }
         }
       }
-      max_class_socre *= box_score;
-      if (max_class_socre > this->confThreshold)
-      {
-        float cx = pdata[0] * ratiow;  ///cx
-        float cy = pdata[1] * ratioh;   ///cy
-        float w = pdata[2] * ratiow;   ///w
-        float h = pdata[3] * ratioh;  ///h
-
-        float xmin = cx - 0.5 * w;
-        float ymin = cy - 0.5 * h;
-        float xmax = cx + 0.5 * w;
-        float ymax = cy + 0.5 * h;
-
-        generate_boxes.push_back(BoxInfo{ xmin, ymin, xmax, ymax, max_class_socre, max_ind });
-      }
     }
-    pdata += nout;
-  }
 
-  // Perform non maximum suppression to eliminate redundant overlapping boxes with
-  // lower confidences
-  nms(generate_boxes);
-  for (size_t i = 0; i < generate_boxes.size(); ++i)
-  {
-    int xmin = int(generate_boxes[i].x1);
-    int ymin = int(generate_boxes[i].y1);
-    rectangle(frame, Point(xmin, ymin), Point(int(generate_boxes[i].x2), int(generate_boxes[i].y2)), Scalar(0, 0, 255), 2);
-    string label = format("%.2f", generate_boxes[i].score);
-    label = this->class_names[generate_boxes[i].label] + ":" + label;
-    putText(frame, label, Point(xmin, ymin - 5), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0, 255, 0), 1);
-  }
-}
+    // Removes overlapping boxes with lower scores
+    void NonMaximumSuppression(std::vector<BoxInfo>& inputBoxes) const {
+      sort(inputBoxes.begin(), inputBoxes.end(), [](BoxInfo a, BoxInfo b) { return a.score > b.score; });
 
-int main()
-{
-  Net_config YOLOV7_nets = { 0.3, 0.5, "../models/best-n-640.onnx" };   ////choices=["models/yolov7_640x640.onnx", "models/yolov7-tiny_640x640.onnx", "models/yolov7_736x1280.onnx", "models/yolov7-tiny_384x640.onnx", "models/yolov7_480x640.onnx", "models/yolov7_384x640.onnx", "models/yolov7-tiny_256x480.onnx", "models/yolov7-tiny_256x320.onnx", "models/yolov7_256x320.onnx", "models/yolov7-tiny_256x640.onnx", "models/yolov7_256x640.onnx", "models/yolov7-tiny_480x640.onnx", "models/yolov7-tiny_736x1280.onnx", "models/yolov7_256x480.onnx"]
-  YOLOV7 net(YOLOV7_nets);
-  string imgpath = "../samples/game-6.jpg";
-  Mat srcimg = imread(imgpath);
+      std::vector<float> vArea(inputBoxes.size());
+      for (int i = 0; i < int(inputBoxes.size()); ++i) {
+        vArea[i] = (inputBoxes.at(i).x2 - inputBoxes.at(i).x1 + 1) * (inputBoxes.at(i).y2 - inputBoxes.at(i).y1 + 1);
+      }
 
-  auto start = chrono::steady_clock::now();
-  net.detect(srcimg);
-  auto end = chrono::steady_clock::now();
+      std::vector<bool> isSuppressed(inputBoxes.size(), false);
+      for (int i = 0; i < int(inputBoxes.size()); ++i) {
+        if (isSuppressed[i]) {
+          continue;
+        }
+
+        for (int j = i + 1; j < int(inputBoxes.size()); ++j) {
+          if (isSuppressed[j]) {
+            continue;
+          }
+
+          float xx1 = (cv::max)(inputBoxes[i].x1, inputBoxes[j].x1);
+          float yy1 = (cv::max)(inputBoxes[i].y1, inputBoxes[j].y1);
+          float xx2 = (cv::min)(inputBoxes[i].x2, inputBoxes[j].x2);
+          float yy2 = (cv::min)(inputBoxes[i].y2, inputBoxes[j].y2);
+
+          float w = (cv::max)(float(0), xx2 - xx1 + 1);
+          float h = (cv::max)(float(0), yy2 - yy1 + 1);
+          float inter = w * h;
+          float ovr = inter / (vArea[i] + vArea[j] - inter);
+
+          if (ovr >= this->nonMaximumSuppressionThreshold) {
+            isSuppressed[j] = true;
+          }
+        }
+      }
+
+      int idx_t = 0;
+      inputBoxes.erase(
+          remove_if(
+              inputBoxes.begin(),
+              inputBoxes.end(),
+              [&idx_t, &isSuppressed](const BoxInfo& f) { return isSuppressed[idx_t++]; }
+          ),
+          inputBoxes.end()
+      );
+    }
+};
+
+int main() {
+  NetConfig DetectorConfig = {
+      0.3,
+      0.5,
+      "../models/best-n-640.onnx",
+      "../coco.names"
+  };
+  YOLODetector net(DetectorConfig);
+
+  cv::Mat sourceImage = cv::imread("../samples/game-5.jpg");
+
+  auto start = std::chrono::steady_clock::now();
+
+  net.detect(sourceImage);
+
+  auto end = std::chrono::steady_clock::now();
   auto diff = end - start;
-  cout << chrono::duration<double, milli>(diff).count() << " ms" << endl;
+  std::cout << std::chrono::duration<double, std::milli>(diff).count() << " ms" << std::endl;
 
-  static const string kWinName = "Deep learning object detection in ONNXRuntime";
-  namedWindow(kWinName, WINDOW_NORMAL);
-  imshow(kWinName, srcimg);
-  waitKey(0);
-  destroyAllWindows();
+  static const std::string windowName = "Deep learning object detection in ONNXRuntime";
+  namedWindow(windowName, cv::WINDOW_NORMAL);
+  imshow(windowName, sourceImage);
+
+  cv::waitKey(0);
+  cv::destroyAllWindows();
 }
