@@ -9,18 +9,23 @@ I mostly just cleaned up the code and then this repository is more of a document
 1) Install dependencies:
 ```bash
 $ brew install cmake
-$ brew install onnxruntime
+$ brew install onnxruntime # optional
 $ brew install opencv
 ```
 
-2) Download ONNX runtime files:
+2) If you are on M1 then you are good to go 🎉
+
+3) If you are not on M1 then download ONNX Runtime
 - Either pick correct version from releases [here](github.com/microsoft/onnxruntime/releases)
-- Or download arm64-1.12.1.tgz version [here](https://github.com/microsoft/onnxruntime/releases/download/v1.12.1/onnxruntime-osx-arm64-1.12.1.tgz)
-- If you are not sure what version to download use the official Optimize Inferencing picker [here](https://onnxruntime.ai)
+- If you are not sure what version to download use the official optimize inferencing picker [here](https://onnxruntime.ai)
 
-3) Put ONNX runtime files to `extenrals/onnxruntime-osx-arm64-1.12.1` (**note:** if you use different version rename `ONNXRUNTIME_ROOT` in CMakeList.txt)
+4) Put ONNX runtime files to `extenrals/`
+5) rename `ONNXRUNTIME_ROOT` in CMakeList.txt to your onnxruntime root folder
 
-4) `.onnx` model and `.jpg` sample files were small so i already commited them. You can replace them in `main.cpp` and use your own weights.
+## Model
+
+- This example uses custom trained model
+- You can use any model you want - don't forget to update `coco.names` file if you do 🙌
 
 ## Preview
 
