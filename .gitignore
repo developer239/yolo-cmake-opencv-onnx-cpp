@@ -1,4 +1,7 @@
 /.idea
 /cmake-build-debug
-/models
-/samples
+/models/*
+!/models/best-n-640.onnx
+/samples/*
+!/samples/game-2.jpg
+!/samples/game-3.jpg
