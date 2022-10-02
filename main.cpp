@@ -224,7 +224,11 @@ int main()
   YOLOV7 net(YOLOV7_nets);
   string imgpath = "../samples/game-6.jpg";
   Mat srcimg = imread(imgpath);
+
+  auto start = chrono::steady_clock::now();
   net.detect(srcimg);
+  auto end = chrono::steady_clock::now();
+  auto diff = end - start;
 
   static const string kWinName = "Deep learning object detection in ONNXRuntime";
   namedWindow(kWinName, WINDOW_NORMAL);
