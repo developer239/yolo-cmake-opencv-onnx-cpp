@@ -220,11 +220,16 @@ void YOLOV7::detect(Mat& frame)
 
 int main()
 {
-  Net_config YOLOV7_nets = { 0.3, 0.5, "../models/best-v5.onnx" };   ////choices=["models/yolov7_640x640.onnx", "models/yolov7-tiny_640x640.onnx", "models/yolov7_736x1280.onnx", "models/yolov7-tiny_384x640.onnx", "models/yolov7_480x640.onnx", "models/yolov7_384x640.onnx", "models/yolov7-tiny_256x480.onnx", "models/yolov7-tiny_256x320.onnx", "models/yolov7_256x320.onnx", "models/yolov7-tiny_256x640.onnx", "models/yolov7_256x640.onnx", "models/yolov7-tiny_480x640.onnx", "models/yolov7-tiny_736x1280.onnx", "models/yolov7_256x480.onnx"]
+  Net_config YOLOV7_nets = { 0.3, 0.5, "../models/best-n-640.onnx" };   ////choices=["models/yolov7_640x640.onnx", "models/yolov7-tiny_640x640.onnx", "models/yolov7_736x1280.onnx", "models/yolov7-tiny_384x640.onnx", "models/yolov7_480x640.onnx", "models/yolov7_384x640.onnx", "models/yolov7-tiny_256x480.onnx", "models/yolov7-tiny_256x320.onnx", "models/yolov7_256x320.onnx", "models/yolov7-tiny_256x640.onnx", "models/yolov7_256x640.onnx", "models/yolov7-tiny_480x640.onnx", "models/yolov7-tiny_736x1280.onnx", "models/yolov7_256x480.onnx"]
   YOLOV7 net(YOLOV7_nets);
   string imgpath = "../samples/game-6.jpg";
   Mat srcimg = imread(imgpath);
+
+  auto start = chrono::steady_clock::now();
   net.detect(srcimg);
+  auto end = chrono::steady_clock::now();
+  auto diff = end - start;
+  cout << chrono::duration<double, milli>(diff).count() << " ms" << endl;
 
   static const string kWinName = "Deep learning object detection in ONNXRuntime";
   namedWindow(kWinName, WINDOW_NORMAL);
