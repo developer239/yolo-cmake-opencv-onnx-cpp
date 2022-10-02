@@ -1,6 +1,6 @@
 # YOLO CMake OpenCV ONNX CPP
 
-Implementation is basically cleaned up version of [hpc203/yolov7-opencv-onnxrun-cpp-py](github.com/hpc203/yolov7-opencv-onnxrun-cpp-py) repo.
+Implementation is basically cleaned up version of [hpc203/yolov7-opencv-onnxrun-cpp-py](https://github.com/hpc203/yolov7-opencv-onnxrun-cpp-py) repo.
 
 This repository is more of a documentation for my own purposes to show how to run these libraries with CMake. Maybe someone else will find this useful.
 
