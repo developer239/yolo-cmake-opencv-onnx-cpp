@@ -11,7 +11,7 @@ int main() {
   YOLODetector net(DetectorConfig);
 
   // Initialize the image
-  cv::Mat sourceImage = cv::imread("../samples/game-5.jpg");
+  cv::Mat sourceImage = cv::imread("../samples/game-2.jpg");
 
   // Run detection
   auto start = std::chrono::steady_clock::now();

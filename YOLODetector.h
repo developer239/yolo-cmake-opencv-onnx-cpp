@@ -41,47 +41,6 @@ class YOLODetector {
       LoadClasses(config.pathToClasses);
     }
 
-    void LoadTypeInfo() {
-      size_t numInputNodes = ortSession.GetInputCount();
-      size_t numOutputNodes = ortSession.GetOutputCount();
-
-      Ort::AllocatorWithDefaultOptions allocator;
-
-      for (int i = 0; i < numInputNodes; i++) {
-        Ort::TypeInfo inputTypeInfo = ortSession.GetInputTypeInfo(i);
-        auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
-        auto inputDims = inputTensorInfo.GetShape();
-
-        inputNodeDims.push_back(inputDims);
-        inputNames.push_back(ortSession.GetInputName(i, allocator));
-      }
-
-      for (int i = 0; i < numOutputNodes; i++) {
-        Ort::TypeInfo outputTypeInfo = ortSession.GetOutputTypeInfo(i);
-        auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
-        auto outputDims = outputTensorInfo.GetShape();
-
-        outputNames.push_back(ortSession.GetOutputName(i, allocator));
-        outputNodeDims.push_back(outputDims);
-      }
-
-      this->inputHeight = inputNodeDims[0][2];
-      this->inputWidth = inputNodeDims[0][3];
-      this->outputNodeDim = outputNodeDims[0][2];
-      this->numberOfProposals = outputNodeDims[0][1];
-    }
-
-    void LoadClasses(const std::string& pathToClasses) {
-      std::ifstream ifs(pathToClasses.c_str());
-      std::string line;
-
-      while (getline(ifs, line)) {
-        this->classNames.push_back(line);
-      }
-
-      this->numberOfClasses = classNames.size();
-    }
-
     void detect(cv::Mat& frame) {
       cv::Mat resizedImage;
       resize(frame, resizedImage, cv::Size(this->inputWidth, this->inputHeight));
@@ -174,6 +133,47 @@ class YOLODetector {
 
     std::vector<std::vector<int64_t>> inputNodeDims;
     std::vector<std::vector<int64_t>> outputNodeDims;
+
+    void LoadTypeInfo() {
+      size_t numInputNodes = ortSession.GetInputCount();
+      size_t numOutputNodes = ortSession.GetOutputCount();
+
+      Ort::AllocatorWithDefaultOptions allocator;
+
+      for (int i = 0; i < numInputNodes; i++) {
+        Ort::TypeInfo inputTypeInfo = ortSession.GetInputTypeInfo(i);
+        auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto inputDims = inputTensorInfo.GetShape();
+
+        inputNodeDims.push_back(inputDims);
+        inputNames.push_back(ortSession.GetInputName(i, allocator));
+      }
+
+      for (int i = 0; i < numOutputNodes; i++) {
+        Ort::TypeInfo outputTypeInfo = ortSession.GetOutputTypeInfo(i);
+        auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto outputDims = outputTensorInfo.GetShape();
+
+        outputNames.push_back(ortSession.GetOutputName(i, allocator));
+        outputNodeDims.push_back(outputDims);
+      }
+
+      this->inputHeight = inputNodeDims[0][2];
+      this->inputWidth = inputNodeDims[0][3];
+      this->outputNodeDim = outputNodeDims[0][2];
+      this->numberOfProposals = outputNodeDims[0][1];
+    }
+
+    void LoadClasses(const std::string& pathToClasses) {
+      std::ifstream ifs(pathToClasses.c_str());
+      std::string line;
+
+      while (getline(ifs, line)) {
+        this->classNames.push_back(line);
+      }
+
+      this->numberOfClasses = classNames.size();
+    }
 
     void DrawBoxes(cv::Mat& frame, std::vector<BoxInfo> generatedBoxes) {
       for (auto& generatedBox: generatedBoxes) {
