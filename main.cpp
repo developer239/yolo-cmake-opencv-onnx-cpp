@@ -6,8 +6,7 @@ int main() {
       0.3,
       0.5,
       "../models/best-n-640.onnx",
-      "../coco.names"
-  };
+      "../coco.names"};
   YOLODetector net(DetectorConfig);
 
   // Initialize the image
@@ -20,7 +19,8 @@ int main() {
 
   auto end = std::chrono::steady_clock::now();
   auto diff = end - start;
-  std::cout << std::chrono::duration<double, std::milli>(diff).count() << " ms" << std::endl;
+  std::cout << std::chrono::duration<double, std::milli>(diff).count() << " ms"
+            << std::endl;
 
   // Show the result
   static const std::string windowName = "YOLO CMake OpenCV ONNX CPP";
