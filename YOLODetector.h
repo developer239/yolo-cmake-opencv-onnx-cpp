@@ -63,7 +63,8 @@ class YOLODetector {
         inputImage.data(),
         inputImage.size(),
         inputShape.data(),
-        inputShape.size());
+        inputShape.size()
+    );
 
     std::vector<Ort::Value> ortOutputs = ortSession.Run(
         Ort::RunOptions{nullptr},
@@ -71,7 +72,8 @@ class YOLODetector {
         &input_tensor_,
         1,
         outputNames.data(),
-        outputNames.size());
+        outputNames.size()
+    );
 
     std::vector<BoxInfo> generatedBoxes;
     float ratioHeight = (float)frame.rows / this->inputHeight;
@@ -105,7 +107,8 @@ class YOLODetector {
           float ymax = cy + 0.5 * h;
 
           generatedBoxes.push_back(
-              BoxInfo{xmin, ymin, xmax, ymax, maxClassScore, maxInd});
+              BoxInfo{xmin, ymin, xmax, ymax, maxClassScore, maxInd}
+          );
         }
       }
 
@@ -192,7 +195,8 @@ class YOLODetector {
           cv::Point(xMin, yMin),
           cv::Point(int(generatedBox.x2), int(generatedBox.y2)),
           cv::Scalar(0, 0, 255),
-          2);
+          2
+      );
 
       std::string label = cv::format("%.2f", generatedBox.score);
       label = this->classNames[generatedBox.label] + ":" + label;
@@ -203,7 +207,8 @@ class YOLODetector {
           cv::FONT_HERSHEY_SIMPLEX,
           0.75,
           cv::Scalar(0, 255, 0),
-          1);
+          1
+      );
     }
   }
 
@@ -269,7 +274,9 @@ class YOLODetector {
             inputBoxes.end(),
             [&idx_t, &isSuppressed](const BoxInfo& f) {
               return isSuppressed[idx_t++];
-            }),
-        inputBoxes.end());
+            }
+        ),
+        inputBoxes.end()
+    );
   }
 };
