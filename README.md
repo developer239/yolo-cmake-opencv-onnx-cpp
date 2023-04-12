@@ -12,7 +12,7 @@ on MacOS.
 
 ```bash
 $ brew install cmake
-$ brew install onnxruntime # optional by default externals/onnxruntime-osx-arm64-1.12.1 is used 
+$ brew install onnxruntime 
 $ brew install opencv
 ```
 
