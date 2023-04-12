@@ -51,11 +51,11 @@ $ brew install opencv
 - 6 validation images
 - 4 test images
 
-![preview-detection-1](preview-detection-1.png)
-![preview-segmentation-1](preview-segmentation-1.png)
+![preview-detection-1](docs/preview-detection-1.png)
+![preview-segmentation-1](docs/preview-segmentation-1.png)
 
-![preview-detection-2](preview-detection-2.png)
-![preview-segmentation-2](preview-segmentation-2.png)
+![preview-detection-2](docs/preview-detection-2.png)
+![preview-segmentation-2](docs/preview-segmentation-2.png)
 
-![preview-detection-3](preview-detection-3.png)
-![preview-segmentation-3](preview-segmentation-3.png)
+![preview-detection-3](docs/preview-detection-3.png)
+![preview-segmentation-3](docs/preview-segmentation-3.png)

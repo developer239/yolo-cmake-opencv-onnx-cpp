@@ -5,7 +5,7 @@ project(${APP_NAME})
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(${APP_NAME} main.cpp YOLODetector.h YOLOSegmentor.h)
+add_executable(${APP_NAME} src/main.cpp src/YOLODetector.h src/YOLOSegmentor.h)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -26,7 +26,12 @@ target_include_directories(${APP_NAME} PUBLIC
         ${leptonica_include})
 
 # OnnxRuntime
-set(ONNXRUNTIME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/externals/onnxruntime-osx-arm64-1.12.1")
+if(DEFINED ENV{ONNXRUNTIME_ROOT})
+    set(ONNXRUNTIME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/externals/$ENV{ONNXRUNTIME_ROOT}")
+else()
+    set(ONNXRUNTIME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/externals/onnxruntime-osx-arm64-1.12.1")
+endif()
+
 find_package(ONNXRUNTIME REQUIRED)
 target_link_libraries(${APP_NAME} PUBLIC ${ONNXRUNTIME_LIBRARY})
 target_include_directories(${APP_NAME} PUBLIC ${ONNXRUNTIME_INCLUDE_DIR})
