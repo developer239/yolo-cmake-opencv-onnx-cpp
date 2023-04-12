@@ -28,7 +28,7 @@ $ brew install opencv
 4) Put ONNX runtime files to `external/`
 
 
-5) Point `ONNXRUNTIME_ROOT` in CMakeList.txt to your onnxruntime root folder
+5) Set `ONNXRUNTIME_ROOT` .env variable to your onnxruntime folder name
 
 ## Model
 
