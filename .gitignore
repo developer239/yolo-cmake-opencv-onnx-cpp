@@ -2,6 +2,8 @@
 /cmake-build-debug
 /models/*
 !/models/best-n-640.onnx
+!/models/best-s-640-seg.onnx
 /samples/*
+!/samples/game-1.jpg
 !/samples/game-2.jpg
 !/samples/game-3.jpg
