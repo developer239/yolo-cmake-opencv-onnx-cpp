@@ -1,5 +1,7 @@
 # YOLO CMake OpenCV ONNX CPP
 
+![master](https://github.com/developer239/yolo-cmake-opencv-onnx-cpp/actions/workflows/ci.yml/badge.svg)
+
 Object detection implementation is inspired
 by [hpc203/yolov7-opencv-onnxrun-cpp-py](https://github.com/hpc203/yolov7-opencv-onnxrun-cpp-py)
 

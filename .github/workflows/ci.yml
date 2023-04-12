@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    paths:
+      - 'src/**'
 
 env:
   ONNXRUNTIME_ROOT: onnxruntime-osx-x86_64-1.12.1
