@@ -42,7 +42,7 @@ $ brew install opencv
 
 ## Preview
 
-100 epochs. Trained on YOLOv5n-640 models. Inference on M2 CPU takes ~40ms.
+100 epochs. Trained on YOLOv5n-640 models. Inference on M1 CPU takes ~40ms.
 
 **Object detection dataset information:**
 - 186 training images
