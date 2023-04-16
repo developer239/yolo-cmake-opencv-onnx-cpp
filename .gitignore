@@ -3,7 +3,10 @@
 /models/*
 !/models/best-n-640.onnx
 !/models/best-s-640-seg.onnx
+!/models/first-best-s-640-seg.onnx
+!/models/second-best-s-640-seg.onnx
 !/models/class.names
+!/models/class-seg.names
 /samples/*
 !/samples/game-1.jpg
 !/samples/game-2.jpg

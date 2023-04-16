@@ -49,9 +49,9 @@ $ brew install opencv
 
 **Instance segmentation dataset information:**
 
-- 63 training images (AUGMENTATION rotation: Between -15° and +15°)
-- 6 validation images
-- 4 test images
+- 540 training images (AUGMENTATION rotation: Between -15° and +15°)
+- 53 validation images
+- 28 test images
 
 ![preview-detection-1](docs/preview-detection-1.png)
 ![preview-segmentation-1](docs/preview-segmentation-1.png)

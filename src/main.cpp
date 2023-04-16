@@ -8,8 +8,8 @@ void InstanceSegmentation(std::string& imagePath) {
   SegNetConfig DetectorConfig = {
       0.3,
       0.3,
-      "../models/best-s-640-seg.onnx",
-      "../models/class.names"};
+      "../models/second-best-s-640-seg.onnx",
+      "../models/class-seg.names"};
   YOLOSegmentor net(DetectorConfig);
 
   // Initialize the image
