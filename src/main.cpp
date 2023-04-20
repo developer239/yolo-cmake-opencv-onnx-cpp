@@ -18,7 +18,8 @@ void InstanceSegmentation(std::string& imagePath) {
   // Run detection
   auto start = std::chrono::steady_clock::now();
 
-  net.Detect(sourceImage);
+  auto segments = net.Detect(sourceImage);
+  net.DrawSegments(sourceImage, segments, false);
 
   auto end = std::chrono::steady_clock::now();
   auto diff = end - start;
@@ -50,7 +51,8 @@ void ObjectDetection(std::string& imagePath) {
   // Run detection
   auto start = std::chrono::steady_clock::now();
 
-  net.detect(sourceImage);
+  auto boxes = net.Detect(sourceImage);
+  net.DrawBoxes(sourceImage, boxes);
 
   auto end = std::chrono::steady_clock::now();
   auto diff = end - start;

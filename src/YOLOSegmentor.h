@@ -122,12 +122,12 @@ class YOLOSegmentor {
     }
   }
 
-  void Detect(cv::Mat& inputImage) {
+  std::vector<Segment> Detect(cv::Mat& inputImage) {
     std::vector<cv::Mat> inputImages = {inputImage};
     std::vector<std::vector<Segment>> batched_outputs;
 
     if (BatchDetect(inputImages, batched_outputs)) {
-      inputImage = DrawPredictions(inputImage, batched_outputs[0], classNames);
+      return batched_outputs[0];
     }
   }
 
@@ -280,6 +280,46 @@ class YOLOSegmentor {
       output.push_back(tempOutput);
     }
     return !output.empty();
+  }
+
+  void DrawSegments(
+      cv::Mat& image, const std::vector<Segment>& results,
+      bool shouldDrawBoundingBox = false
+  ) {
+    cv::Mat imageWithMask = image.clone();
+    for (const auto& result : results) {
+      // Get the bounding box coordinates
+      const int x = result.bbox.x;
+      int y = result.bbox.y;
+
+      // Draw the bounding box
+      if(shouldDrawBoundingBox) {
+        rectangle(imageWithMask, result.bbox, cv::Scalar(0, 0, 255), 2, 8);
+      }
+
+      // Add the mask to the image
+      const cv::Mat mask = result.mask;
+      imageWithMask(result.bbox).setTo(cv::Scalar(0, 0, 255), mask);
+
+      // Add the label to the image
+      const std::string label =
+          classNames[result.id] + ":" + std::to_string(result.confidence);
+      const cv::Size label_size =
+          getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, nullptr);
+      y = std::max(y, label_size.height);
+      const cv::Point label_origin(x, y);
+      putText(
+          imageWithMask,
+          label,
+          label_origin,
+          cv::FONT_HERSHEY_SIMPLEX,
+          0.75,
+          cv::Scalar(0, 255, 0),
+          1
+      );
+    }
+
+    addWeighted(imageWithMask, 0.5, image, 0.5, 0, image);
   }
 
  private:
@@ -534,48 +574,5 @@ class YOLOSegmentor {
     mask = mask(bbox - cv::Point(left, top)) > confidenceThreshold;
 
     output.mask = mask;
-  }
-
-  cv::Mat DrawPredictions(
-      cv::Mat& image, const std::vector<Segment>& results,
-      const std::vector<std::string>& classNames,
-      bool shouldDrawBoundingBox = false
-  ) {
-    cv::Mat imageWithMask = image.clone();
-    for (const auto& result : results) {
-      // Get the bounding box coordinates
-      const int x = result.bbox.x;
-      int y = result.bbox.y;
-
-      // Draw the bounding box
-      if(shouldDrawBoundingBox) {
-        rectangle(imageWithMask, result.bbox, cv::Scalar(0, 0, 255), 2, 8);
-      }
-
-      // Add the mask to the image
-      const cv::Mat mask = result.mask;
-      imageWithMask(result.bbox).setTo(cv::Scalar(0, 0, 255), mask);
-
-      // Add the label to the image
-      const std::string label =
-          classNames[result.id] + ":" + std::to_string(result.confidence);
-      const cv::Size label_size =
-          getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, nullptr);
-      y = std::max(y, label_size.height);
-      const cv::Point label_origin(x, y);
-      putText(
-          imageWithMask,
-          label,
-          label_origin,
-          cv::FONT_HERSHEY_SIMPLEX,
-          0.75,
-          cv::Scalar(0, 255, 0),
-          1
-      );
-    }
-
-    addWeighted(imageWithMask, 0.5, image, 0.5, 0, imageWithMask);
-
-    return imageWithMask;
   }
 };
