@@ -8,7 +8,7 @@ by [hpc203/yolov7-opencv-onnxrun-cpp-py](https://github.com/hpc203/yolov7-opencv
 This repository serves mostly as documentation for my personal use, demonstrating how to use ONNX and OpenCV with CMake
 on MacOS.
 
-## How to run
+## MacOS installation
 
 1) Install dependencies:
 
@@ -18,19 +18,25 @@ $ brew install onnxruntime
 $ brew install opencv
 ```
 
-2) If you are on M1 then you are good to go 🎉
+2) If you are on ARM then you are good to go 🎉
 
+3) **If you are not using an ARM processor**, [download correct runtime 1.12.1 header files from the official GitHub repository](https://github.com/microsoft/onnxruntime/releases/tag/v1.12.1).
 
-3) **If you are not using an M1 processor**, download ONNX Runtime.
+4) Put onnxruntime files to `external/`
 
-- Either select the correct version from the releases available [here](github.com/microsoft/onnxruntime/releases)
-- If you are unsure which version to download, you can use the official optimize inferencing
-  picker [here](https://onnxruntime.ai)
+5) Set `ONNXRUNTIME_ROOT` env variable to your onnxruntime folder name
 
-4) Put ONNX runtime files to `external/`
+## Windows installation
 
+1) Install dependencies:
 
-5) Set `ONNXRUNTIME_ROOT` .env variable to your onnxruntime folder name
+```bash
+$ choco install cmake --pre
+$ choco install opencv
+```
+
+2) Download [ONNX Runtime 1.12.1](https://github.com/microsoft/onnxruntime/releases/download/v1.12.1/onnxruntime-win-x64-1.12.1.zip)
+3) Extract and put onnxruntime folder to `external/onnxruntime-win-x64-1.12.1`
 
 ## Model
 
@@ -38,7 +44,7 @@ $ brew install opencv
   using [Roboflow](https://roboflow.com/#annotate) and then use one of
   their [official notebooks](https://github.com/roboflow/notebooks) to perform the training. There are also many
   comprehensive tutorials in the official [ultralytics/yolov5 repository](https://github.com/ultralytics/yolov5)
-- You are free to use any model you prefer, but be sure to update the `class.names` file accordingly. Additionally, for instance segmentation, it is important to pass `SegNetConfig` with proper parameters. 
+- You are free to use any model you prefer, but be sure to update the `class.names` file accordingly. Additionally, for instance segmentation, it is important to pass `SegNetConfig` with proper parameters.
 
 ## Preview
 
