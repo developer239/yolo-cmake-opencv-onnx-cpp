@@ -11,3 +11,5 @@
 !/samples/game-1.jpg
 !/samples/game-2.jpg
 !/samples/game-3.jpg
+
+/externals/onnxruntime-win-x64-1.12.1

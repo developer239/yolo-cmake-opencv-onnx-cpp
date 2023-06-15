@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -51,7 +55,16 @@ class YOLOSegmentor {
         GraphOptimizationLevel::ORT_ENABLE_EXTENDED
     );
 
-    session = Ort::Session(env, config.pathToModel.c_str(), sessionOptions);
+    #ifdef _WIN32
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, config.pathToModel.c_str(), (int)config.pathToModel.size(), NULL, 0);
+    std::wstring wstrPathToModel(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, config.pathToModel.c_str(), (int)config.pathToModel.size(), &wstrPathToModel[0], size_needed);
+    ORTCHAR_T* path = const_cast<ORTCHAR_T*>(wstrPathToModel.c_str());
+#else
+    ORTCHAR_T* path = const_cast<ORTCHAR_T*>(config.pathToModel.c_str());
+#endif
+
+    session = Ort::Session(env, path, sessionOptions);
 
     LoadTypeInfo();
     LoadClasses(config.pathToClasses);
